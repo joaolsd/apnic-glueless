@@ -124,7 +124,7 @@ void DynamicZone::main_callback(evldns_server_request *srq, ldns_rdf *qname, ldn
 	ldns_pkt_set_nscount(resp, ldns_rr_list_rr_count(authority));
 }
 
-static ldns_rr* add_stuffing(ldns_rr *old_sig, ldns_rdf *qname, unsigned int type, unsigned int len)
+static ldns_rr* add_stuffing(ldns_rr *old_sig, ldns_rdf *qname, unsigned int type, int len)
 {
 	if (len > 8192) {
 		return NULL;
@@ -135,7 +135,7 @@ static ldns_rr* add_stuffing(ldns_rr *old_sig, ldns_rdf *qname, unsigned int typ
 	for the total size to be the same as the size of the response from the
 	sibling, the padding value needs to be reduced by 460 (0x1cc) bytes. */
 	len -= 460;
-	if (len < 0) {
+	if (len <= 0) {
 		return NULL;
 	}
 
