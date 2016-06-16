@@ -187,7 +187,9 @@ void DynamicZone::apex_callback(ldns_pkt *resp, ldns_rdf *qname, ldns_rr_type qt
 
 			if (dostuff && (prelen > 0 || postlen > 0)) {
 				new_sig = add_stuffing((rrsets->signatures)->rr, qname, LDNS_RR_TYPE_RRSIG, prelen+postlen+pad_adj);
-				ldns_dnssec_rrs_add_rr(rrsets->signatures, new_sig);
+				if (new_sig != NULL) {
+					ldns_dnssec_rrs_add_rr(rrsets->signatures, new_sig);
+				}
 			}
 			LDNS_rr_list_cat_dnssec_rrs_clone(answer, rrsets->signatures);
 		}
