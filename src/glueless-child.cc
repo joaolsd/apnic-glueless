@@ -47,7 +47,7 @@ public:
 
 public:
 	void main_callback(evldns_server_request *srq, ldns_rdf *qname, ldns_rr_type qtype);
-	void apex_callback(ldns_pkt *resp, ldns_rdf *qname, ldns_rr_type qtype, bool dnssec_ok, int pad_adj);
+	void apex_callback(ldns_pkt *resp, ldns_rdf *qname, ldns_rr_type qtype, bool dnssec_ok);
 	void sub_callback(ldns_pkt *resp, ldns_rdf *qname, ldns_rr_type qtype, bool dnssec_ok);
 };
 
@@ -104,16 +104,12 @@ void DynamicZone::main_callback(evldns_server_request *srq, ldns_rdf *qname, ldn
 	auto authority = ldns_pkt_authority(resp);
 	bool dnssec_ok = ldns_pkt_edns_do(req);
 	char host[NI_MAXHOST], port[NI_MAXSERV];
-	int pad_adj = 0;
 
 	if (ldns_dname_compare(qname, origin) == 0) {
     // Determine the client's address family in order to derive whether the
 		// query at the sibling was for an A or a AAAA RR and adjust the padding
 		// later on
-		if (((struct sockaddr *)&srq->addr)->sa_family == AF_INET6) {
-			pad_adj = 12;
-		}
-		apex_callback(resp, qname, qtype, dnssec_ok, pad_adj);
+		apex_callback(resp, qname, qtype, dnssec_ok);
 	} else if (ldns_dname_is_subdomain(qname, origin)) {
 		sub_callback(resp, qname, qtype, dnssec_ok);
 	} else {
@@ -162,7 +158,7 @@ static ldns_rr* add_stuffing(ldns_rr *old_sig, ldns_rdf *qname, unsigned int typ
 	return new_sig;
 }
 
-void DynamicZone::apex_callback(ldns_pkt *resp, ldns_rdf *qname, ldns_rr_type qtype, bool dnssec_ok, int pad_adj)
+void DynamicZone::apex_callback(ldns_pkt *resp, ldns_rdf *qname, ldns_rr_type qtype, bool dnssec_ok)
 {
 	auto answer = ldns_pkt_answer(resp);
 	auto authority = ldns_pkt_authority(resp);
@@ -186,7 +182,7 @@ void DynamicZone::apex_callback(ldns_pkt *resp, ldns_rdf *qname, ldns_rr_type qt
 			bool dostuff = sscanf(p, "%03x-%03x-%04x-%04x-%*04x-", &prelen, &postlen, &pretype, &posttype) == 4;
 
 			if (dostuff && (prelen > 0 || postlen > 0)) {
-				new_sig = add_stuffing((rrsets->signatures)->rr, qname, LDNS_RR_TYPE_RRSIG, prelen+postlen+pad_adj);
+				new_sig = add_stuffing((rrsets->signatures)->rr, qname, LDNS_RR_TYPE_RRSIG, prelen+postlen);
 				if (new_sig != NULL) {
 					ldns_dnssec_rrs_add_rr(rrsets->signatures, new_sig);
 				}
