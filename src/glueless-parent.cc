@@ -21,6 +21,8 @@
 #include "process.h"
 #include "logging.h"
 
+static 	time_t exp_timeout_t = 0;
+
 class ParentZone : public SignedZone {
 private:
 	ldns_dnssec_rrsets	*child_nsset = 0;
@@ -84,6 +86,21 @@ ParentZone::~ParentZone()
 
 void ParentZone::main_callback(evldns_server_request *srq, ldns_rdf *qname, ldns_rr_type qtype)
 {
+	
+	int exp_time = 0;
+
+	// extract first subdomain label
+	unsigned int label_count;
+	ldns_rdf *child = get_child(qname, label_count);
+	auto p = (char *)ldns_rdf_data(child) + 1;
+	(void)sscanf(p, "%*03x-%*03x-%*04x-%*04x-%*04x-%d-", &exp_time);
+	
+	auto cur_time = time(NULL);
+	if (exp_timeout_t != 0 && (cur_time - exp_time) > exp_timeout_t) {
+		srq->blackhole = 1;
+		return;
+	}
+	
 	auto req = srq->request;
 	auto resp = srq->response = evldns_response(req, LDNS_RCODE_NOERROR);
 	auto answer = ldns_pkt_answer(resp);
@@ -175,6 +192,7 @@ void ParentZone::deny_wildcard(ldns_pkt *resp)
 
 void ParentZone::referral_callback(ldns_rdf *qname, ldns_rr_type qtype, bool dnssec_ok, ldns_pkt *resp)
 {
+
 	// extract first subdomain label
 	unsigned int label_count;
 	ldns_rdf *child = get_child(qname, label_count);
@@ -288,6 +306,30 @@ static void *start_instance(void *userdata)
 	return NULL;
 }
 
+static time_t parse_time(const char *time_string)
+{
+	int i_time = 0;
+	char unit;
+	
+	sscanf(time_string, "%d%c", &i_time, &unit);
+	switch (unit)
+	{
+		case 'm': // minutes
+			i_time *= 60;
+			break;
+		case 'h': // hours
+			i_time *= 3600;
+			break;
+		case 'd': // days
+			i_time *= 86400;
+			break;
+		case 's': // seconds (the default)
+		default:
+			break;
+	}
+	return i_time;
+}
+
 int main(int argc, char *argv[])
 {
 	int				n_forks = 4;
@@ -300,6 +342,7 @@ int main(int argc, char *argv[])
 	const char		*keyfile = "data/Ktest.dotnxdomain.net.private";
 	const char		*logfile = "./queries-parent-%F.log";
 	const char		*childkeyfile = nullptr;
+	const char		*exp_timeout ="0m";
 	ldns_enum_hash	 algo = LDNS_SHA256;
 
 	--argc; ++argv;
@@ -315,12 +358,14 @@ int main(int argc, char *argv[])
 			case 'l': --argc; logfile = *++argv; break;
 			case 'f': --argc; n_forks = atoi(*++argv); break;
 			case 'a': --argc; algo = (ldns_enum_hash)atoi(*++argv); break;
+			case 'x': --argc; exp_timeout = *++argv; break;
 			default: exit(1);
 		}
 		--argc;
 		++argv;
 	}
 
+	exp_timeout_t = parse_time(exp_timeout);
 	ParentZone		 zone(domain, zonefile, keyfile, childkeyfile, logfile, algo);
 	InstanceData	 data = { EVLDNSBase::bind_to_all(hostnames, port, 100), &zone };
 
