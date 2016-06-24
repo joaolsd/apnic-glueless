@@ -22,6 +22,8 @@
 #include "process.h"
 #include "logging.h"
 
+static 	time_t exp_timeout_t = 0;
+
 class SiblingZone : public Zone {
 private:
 	ldns_rdf			*wild;
@@ -54,6 +56,20 @@ SiblingZone::~SiblingZone()
 
 void SiblingZone::main_callback(evldns_server_request *srq, ldns_rdf *qname, ldns_rr_type qtype)
 {
+	
+	int exp_time = 0;
+
+	// extract first subdomain label
+	auto sub_label = ldns_dname_label(qname, 0);
+	auto p = (char *)ldns_rdf_data(sub_label) + 1;
+	(void)sscanf(p, "%*03x-%*03x-%*04x-%*04x-%*04x-%d-", &exp_time);
+	
+	auto cur_time = time(NULL);
+	if (exp_timeout_t != 0 && (cur_time - exp_time) > exp_timeout_t) {
+		srq->blackhole = 1;
+		return;
+	}
+	
 	auto req = srq->request;
 	auto resp = srq->response = evldns_response(req, LDNS_RCODE_NOERROR);
 	auto answer = ldns_pkt_answer(resp);
@@ -217,6 +233,7 @@ int main(int argc, char *argv[])
 	const char		*domain = "oob.dashnxdomain.net";
 	const char		*zonefile = "data/zone.oob.dashnxdomain.net";
 	const char		*logfile = "./queries-sibling-%F.log";
+	const char		*exp_timeout ="0m";
 
 	--argc; ++argv;
 	while (argc > 0 && **argv == '-') {
@@ -228,12 +245,15 @@ int main(int argc, char *argv[])
 			case 'z': --argc; zonefile = *++argv; break;
 			case 'l': --argc; logfile = *++argv; break;
 			case 'f': --argc; n_forks = atoi(*++argv); break;
+			case 'x': --argc; exp_timeout = *++argv; break;
 			default: exit(1);
 		}
 		--argc;
 		++argv;
 	}
 
+	exp_timeout_t = parse_time(exp_timeout);
+	// fprintf (stderr, "time: %d", exp_timeout_t);
 	SiblingZone		zone(domain, zonefile, logfile);
 	InstanceData	data = { EVLDNSBase::bind_to_all(hostnames, port, 100), &zone };
 

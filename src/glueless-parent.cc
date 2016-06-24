@@ -306,30 +306,6 @@ static void *start_instance(void *userdata)
 	return NULL;
 }
 
-static time_t parse_time(const char *time_string)
-{
-	int i_time = 0;
-	char unit;
-	
-	sscanf(time_string, "%d%c", &i_time, &unit);
-	switch (unit)
-	{
-		case 'm': // minutes
-			i_time *= 60;
-			break;
-		case 'h': // hours
-			i_time *= 3600;
-			break;
-		case 'd': // days
-			i_time *= 86400;
-			break;
-		case 's': // seconds (the default)
-		default:
-			break;
-	}
-	return i_time;
-}
-
 int main(int argc, char *argv[])
 {
 	int				n_forks = 4;
