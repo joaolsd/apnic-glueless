@@ -90,9 +90,11 @@ void ParentZone::main_callback(evldns_server_request *srq, ldns_rdf *qname, ldns
 	int exp_time = 0;
 
 	// extract first subdomain label
-	unsigned int label_count;
-	ldns_rdf *child = get_child(qname, label_count);
-	auto p = (char *)ldns_rdf_data(child) + 1;
+	// unsigned int label_count;
+	auto sub_label = ldns_dname_label(qname, 0);
+	auto p = (char *)ldns_rdf_data(sub_label) + 1;
+	// ldns_rdf *child = get_child(qname, label_count);
+	// auto p = (char *)ldns_rdf_data(child) + 1;
 	(void)sscanf(p, "%*03x-%*03x-%*04x-%*04x-%*04x-%d-", &exp_time);
 	
 	auto cur_time = time(NULL);

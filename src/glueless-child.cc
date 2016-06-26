@@ -21,6 +21,8 @@
 #include "process.h"
 #include "logging.h"
 
+static 	time_t exp_timeout_t = 0;
+
 class ChildZone {
 
 	ldns_rdf				*origin;
@@ -222,6 +224,20 @@ void DynamicZone::sub_callback(ldns_pkt *resp, ldns_rdf *qname, ldns_rr_type qty
 
 void ChildZone::main_callback(evldns_server_request *srq, ldns_rdf *qname, ldns_rr_type qtype)
 {
+	int exp_time = 0;
+
+	// extract first subdomain label
+	auto sub_label = ldns_dname_label(qname, 0);
+	auto p = (char *)ldns_rdf_data(sub_label) + 1;
+	(void)sscanf(p, "%*03x-%*03x-%*04x-%*04x-%*04x-%d-", &exp_time);
+	
+	auto cur_time = time(NULL);
+	if (exp_timeout_t != 0 && (cur_time - exp_time) > exp_timeout_t) {
+		srq->blackhole = 1;
+		return;
+	}
+	
+	
 	if (ldns_dname_is_subdomain(qname, origin)) {
 		// construct and sign dynamic zone with correct origin
 		unsigned int qname_count = ldns_dname_label_count(qname);
@@ -274,6 +290,7 @@ int main(int argc, char *argv[])
 	const char		*zonefile = "data/zone.wild.test.dotnxdomain.net";
 	const char		*keyfile = "data/Ktest.dotnxdomain.net.private";
 	const char		*logfile = "./queries-child-%F.log";
+	const char		*exp_timeout ="0m";
 
 	--argc; ++argv;
 	while (argc > 0 && **argv == '-') {
@@ -286,12 +303,14 @@ int main(int argc, char *argv[])
 			case 'k': --argc; keyfile = *++argv; break;
 			case 'l': --argc; logfile = *++argv; break;
 			case 'f': --argc; n_forks = atoi(*++argv); break;
+			case 'x': --argc; exp_timeout = *++argv; break;
 			default: exit(1);
 		}
 		--argc;
 		++argv;
 	}
 
+	exp_timeout_t = parse_time(exp_timeout);
 	ChildZone		zone(domain, zonefile, keyfile, logfile);
 	InstanceData	data = { EVLDNSBase::bind_to_all(hostnames, port, 100), &zone };
 
