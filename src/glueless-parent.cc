@@ -95,14 +95,14 @@ void ParentZone::main_callback(evldns_server_request *srq, ldns_rdf *qname, ldns
 	auto p = (char *)ldns_rdf_data(sub_label) + 1;
 	// ldns_rdf *child = get_child(qname, label_count);
 	// auto p = (char *)ldns_rdf_data(child) + 1;
-	(void)sscanf(p, "%*03x-%*03x-%*04x-%*04x-%*04x-%d-", &exp_time);
-	
-	auto cur_time = time(NULL);
-	if (exp_timeout_t != 0 && (cur_time - exp_time) > exp_timeout_t) {
-		srq->blackhole = 1;
-		return;
+	if (sscanf(p, "%*03x-%*03x-%*04x-%*04x-%*04x-%d-", &exp_time) == 1) {
+		auto cur_time = time(NULL);
+		if (exp_timeout_t != 0 && (cur_time - exp_time) > exp_timeout_t) {
+			srq->blackhole = 1;
+			return;
+		}
 	}
-	
+
 	auto req = srq->request;
 	auto resp = srq->response = evldns_response(req, LDNS_RCODE_NOERROR);
 	auto answer = ldns_pkt_answer(resp);
