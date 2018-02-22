@@ -1,4 +1,4 @@
-/*
+34/*
  * Copyright (C) 2015       Internet Systems Consortium, Inc. ("ISC")
  *
  * Permission to use, copy, modify, and/or distribute this software for any
@@ -21,6 +21,10 @@
 #include "utils.h"
 #include "process.h"
 #include "logging.h"
+	
+extern "C" {
+#include "atr_handler.h"	
+}
 
 class SiblingZone : public Zone {
 private:
@@ -34,7 +38,7 @@ public:
 public:
 	void main_callback(evldns_server_request *srq, ldns_rdf *qname, ldns_rr_type qtype);
 	void apex_callback(ldns_rdf *qname, ldns_rr_type qtype, ldns_pkt *resp);
-	void sub_callback(ldns_rdf *qname, ldns_rr_type qtype, ldns_pkt *resp);
+	void sub_callback(ldns_rdf *qname, ldns_rr_type qtype, ldns_pkt *resp, evldns_server_request *srq);
 };
 
 SiblingZone::SiblingZone(
@@ -53,16 +57,16 @@ SiblingZone::~SiblingZone()
 }
 
 void SiblingZone::main_callback(evldns_server_request *srq, ldns_rdf *qname, ldns_rr_type qtype)
-{
+{	
 	auto req = srq->request;
 	auto resp = srq->response = evldns_response(req, LDNS_RCODE_NOERROR);
 	auto answer = ldns_pkt_answer(resp);
 	auto authority = ldns_pkt_authority(resp);
-
+	
 	if (ldns_dname_compare(qname, origin) == 0) {
 		apex_callback(qname, qtype, resp);
 	} else if (ldns_dname_is_subdomain(qname, origin)) {
-		sub_callback(qname, qtype, resp);
+		sub_callback(qname, qtype, resp, srq);
 	} else {
 		ldns_pkt_set_rcode(resp, LDNS_RCODE_REFUSED);
 		return;
@@ -118,10 +122,20 @@ static void add_stuffing(ldns_rr_list *section, ldns_rdf *qname, unsigned int ty
 	ldns_rr_list_push_rr(section, rr);
 }
 
-void SiblingZone::sub_callback(ldns_rdf *qname, ldns_rr_type qtype, ldns_pkt *resp)
+void SiblingZone::sub_callback(ldns_rdf *qname, ldns_rr_type qtype, ldns_pkt *resp, evldns_server_request *srq)
 {
 	auto answer = ldns_pkt_answer(resp);
 	auto authority = ldns_pkt_authority(resp);
+	
+	unsigned int flags = 0;
+	bool is_tcp = false;
+	struct sockaddr_storage *client_addr;
+	ldns_pkt *atr_pkt;
+	int socket;
+
+	if (srq->is_tcp == 1) {
+			is_tcp = true;
+	}
 
 	// make sure there's no more than one label and extract that label
 	unsigned int qname_count = ldns_dname_label_count(qname);
@@ -143,7 +157,11 @@ void SiblingZone::sub_callback(ldns_rdf *qname, ldns_rr_type qtype, ldns_pkt *re
 			// add optional stuffing before the answer here
 			unsigned int prelen, pretype, postlen, posttype;
 			auto p = (char *)ldns_rdf_data(sub_label) + 1;
-			bool dostuff = sscanf(p, "%03x-%03x-%04x-%04x-%*04x-", &prelen, &postlen, &pretype, &posttype) == 4;
+			bool dostuff = sscanf(p, "%03x-%03x-%04x-%04x-%04x-", &prelen, &postlen, &pretype, &posttype, &flags) == 4;
+			bool do_atr = (flags & 0x0002); // ATR is bit 2 in the flags
+			if (is_tcp) {
+				do_atr = false; // ATR is only done for UDP queries
+			}
 
 			// if qtype is AAAA reduce the padding by 12 bytes so that the response
 			// is the same length as for an A.
@@ -180,6 +198,25 @@ void SiblingZone::sub_callback(ldns_rdf *qname, ldns_rr_type qtype, ldns_pkt *re
 			if (dostuff && postlen > 0) {
 				add_stuffing(answer, qname, posttype, postlen);
 			}
+		}
+	}
+	
+	if (do_atr) {
+		client_addr = (struct sockaddr_storage *)malloc(sizeof(struct sockaddr_storage));
+		memcpy(client_addr, &(srq->addr), srq->addrlen);
+		atr_pkt = ldns_pkt_clone(srq->request); // Clone the query
+		ldns_pkt_set_tc(atr_pkt, true);  // and turn it into a truncated,
+		ldns_pkt_set_aa(atr_pkt, true);  // authoritative,
+		ldns_pkt_set_ad(atr_pkt, false); // unverified,
+		ldns_pkt_set_qr(atr_pkt, true);  // response
+		socket = srq->socket;
+		atr_index = get_first_free(); // Setup ATR delayed send
+		if (atr_index >= 0) {
+			makeTimer(atr_index, atr_pkt, client_addr, socket);
+		} else {
+			printf("Could not setup ATR. Index=%d\n",atr_index);
+			free(client_addr);
+			free(atr_pkt);
 		}
 	}
 
