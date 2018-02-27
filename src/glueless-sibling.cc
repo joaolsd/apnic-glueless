@@ -136,6 +136,9 @@ void SiblingZone::sub_callback(ldns_rdf *qname, ldns_rr_type qtype, ldns_pkt *re
 	ldns_pkt *atr_pkt;
 	int socket;
 	bool do_atr;
+	bool v4_lock;
+	bool v6_lock;
+	bool skip_answer = false;
 	
 	if (srq->is_tcp == 1) {
 			is_tcp = true;
@@ -161,68 +164,92 @@ void SiblingZone::sub_callback(ldns_rdf *qname, ldns_rr_type qtype, ldns_pkt *re
 			// add optional stuffing before the answer here
 			unsigned int prelen, pretype, postlen, posttype;
 			auto p = (char *)ldns_rdf_data(sub_label) + 1;
-			bool dostuff = sscanf(p, "%03x-%03x-%04x-%04x-%04x-", &prelen, &postlen, &pretype, &posttype, &flags) == 4;
+			bool dostuff = sscanf(p, "%03x-%03x-%04x-%04x-%04x-", &prelen, &postlen, &pretype, &posttype, &flags) == 5;
 			do_atr = (flags & 0x0002); // ATR is bit 2 in the flags
+			v4_lock = (flags & 0x0004); // Reply if query came over IPv4, otherwise REFUSED
+			v6_lock = (flags & 0x0008); // Reply if query came over IPv6, otherwise REFUSED
 			if (is_tcp) {
 				do_atr = false; // ATR is only done for UDP queries
 			}
-
-			// if qtype is AAAA reduce the padding by 12 bytes so that the response
-			// is the same length as for an A.
-			if (qtype == LDNS_RR_TYPE_AAAA) {
-				if (prelen > postlen) {
-					if (prelen > 12) {
-						prelen -= 12;
-					} else {
-						prelen = 0;
-					}
-				} else { // postlen is the bigger one
-					if (postlen > 12) {
-						postlen -= 12;
-					} else {
-						postlen = 0;
+			
+			// If transport selection was specified in the experiment flags
+			// (0x0004 for IPv4, 0x0006 for IPv6)
+			// and the client's incoming query comes over a non-matching transport
+			// reply with SRVFAIL to trigger fallback to the other transport
+			
+			// struct sockaddr_storage *client_addr = (struct sockaddr_storage *)malloc(sizeof(struct sockaddr_storage));
+			// memcpy(client_addr, &(srq->addr), srq->addrlen);
+			
+			
+			if (srq->addr.ss_family == AF_INET && v6_lock == true) {
+				ldns_pkt_set_rcode(resp, LDNS_RCODE_REFUSED);
+				skip_answer = true;
+			}
+			if (srq->addr.ss_family == AF_INET6 && v4_lock == true) {
+				ldns_pkt_set_rcode(resp, LDNS_RCODE_REFUSED);
+				skip_answer = true;
+			}
+			
+			if (skip_answer != true) {
+				// if qtype is AAAA reduce the padding by 12 bytes so that the response
+				// is the same length as for an A.
+				if (qtype == LDNS_RR_TYPE_AAAA) {
+					if (prelen > postlen) {
+						if (prelen > 12) {
+							prelen -= 12;
+						} else {
+							prelen = 0;
+						}
+					} else { // postlen is the bigger one
+						if (postlen > 12) {
+							postlen -= 12;
+						} else {
+							postlen = 0;
+						}
 					}
 				}
-			}
 
-			if (dostuff && prelen > 0) {
-				add_stuffing(answer, qname, pretype, prelen);
-			}
+				if (dostuff && prelen > 0) {
+					add_stuffing(answer, qname, pretype, prelen);
+				}
 
-			auto rrs = rrsets->rrs;
-			while (rrs) {
-				auto rr = ldns_rr_clone(rrs->rr);
-				ldns_rdf_deep_free(ldns_rr_owner(rr));
-				ldns_rr_set_owner(rr, ldns_rdf_clone(qname));
-				ldns_rr_list_push_rr(answer, rr);
-				rrs = rrs->next;
-			}
+				auto rrs = rrsets->rrs;
+				while (rrs) {
+					auto rr = ldns_rr_clone(rrs->rr);
+					ldns_rdf_deep_free(ldns_rr_owner(rr));
+					ldns_rr_set_owner(rr, ldns_rdf_clone(qname));
+					ldns_rr_list_push_rr(answer, rr);
+					rrs = rrs->next;
+				}
 
-			// add optional stuffing after the answer (or in other sections?)
-			if (dostuff && postlen > 0) {
-				add_stuffing(answer, qname, posttype, postlen);
+				// add optional stuffing after the answer (or in other sections?)
+				if (dostuff && postlen > 0) {
+					add_stuffing(answer, qname, posttype, postlen);
+				}
 			}
 		}
 	}
 	
-	if (do_atr) {
-		int atr_index;
-		client_addr = (struct sockaddr_storage *)malloc(sizeof(struct sockaddr_storage));
-		memcpy(client_addr, &(srq->addr), srq->addrlen);
-		atr_pkt = ldns_pkt_clone(srq->request); // Clone the query
-		ldns_pkt_set_tc(atr_pkt, true);  // and turn it into a truncated,
-		ldns_pkt_set_aa(atr_pkt, true);  // authoritative,
-		ldns_pkt_set_ad(atr_pkt, false); // unverified,
-		ldns_pkt_set_qr(atr_pkt, true);  // response
-		socket = srq->socket;
-		atr_index = get_first_free(); // Setup ATR delayed send
-		if (atr_index >= 0) {
-			makeTimer(atr_index, atr_pkt, client_addr, socket);
-		} else {
-			printf("Could not setup ATR. Index=%d\n",atr_index);
-			free(client_addr);
-			free(atr_pkt);
-		}
+	if (skip_answer != true) {
+		if (do_atr) {
+			int atr_index;
+			client_addr = (struct sockaddr_storage *)malloc(sizeof(struct sockaddr_storage));
+			memcpy(client_addr, &(srq->addr), srq->addrlen);
+			atr_pkt = ldns_pkt_clone(srq->request); // Clone the query
+			ldns_pkt_set_tc(atr_pkt, true);  // and turn it into a truncated,
+			ldns_pkt_set_aa(atr_pkt, true);  // authoritative,
+			ldns_pkt_set_ad(atr_pkt, false); // unverified,
+			ldns_pkt_set_qr(atr_pkt, true);  // response
+			socket = srq->socket;
+			atr_index = get_first_free(); // Setup ATR delayed send
+			if (atr_index >= 0) {
+				makeTimer(atr_index, atr_pkt, client_addr, socket);
+			} else {
+				printf("Could not setup ATR. Index=%d\n",atr_index);
+				free(client_addr);
+				free(atr_pkt);
+			}
+		}		
 	}
 
 	ldns_rdf_deep_free(sub_label);
