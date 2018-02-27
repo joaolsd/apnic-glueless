@@ -1,4 +1,4 @@
-34/*
+/*
  * Copyright (C) 2015       Internet Systems Consortium, Inc. ("ISC")
  *
  * Permission to use, copy, modify, and/or distribute this software for any
@@ -22,8 +22,11 @@
 #include "process.h"
 #include "logging.h"
 	
+#include <signal.h>
+#include <time.h>
+
 extern "C" {
-#include "atr_handler.h"	
+#include "atr_handler.h"
 }
 
 class SiblingZone : public Zone {
@@ -132,7 +135,8 @@ void SiblingZone::sub_callback(ldns_rdf *qname, ldns_rr_type qtype, ldns_pkt *re
 	struct sockaddr_storage *client_addr;
 	ldns_pkt *atr_pkt;
 	int socket;
-
+	bool do_atr;
+	
 	if (srq->is_tcp == 1) {
 			is_tcp = true;
 	}
@@ -158,7 +162,7 @@ void SiblingZone::sub_callback(ldns_rdf *qname, ldns_rr_type qtype, ldns_pkt *re
 			unsigned int prelen, pretype, postlen, posttype;
 			auto p = (char *)ldns_rdf_data(sub_label) + 1;
 			bool dostuff = sscanf(p, "%03x-%03x-%04x-%04x-%04x-", &prelen, &postlen, &pretype, &posttype, &flags) == 4;
-			bool do_atr = (flags & 0x0002); // ATR is bit 2 in the flags
+			do_atr = (flags & 0x0002); // ATR is bit 2 in the flags
 			if (is_tcp) {
 				do_atr = false; // ATR is only done for UDP queries
 			}
@@ -202,6 +206,7 @@ void SiblingZone::sub_callback(ldns_rdf *qname, ldns_rr_type qtype, ldns_pkt *re
 	}
 	
 	if (do_atr) {
+		int atr_index;
 		client_addr = (struct sockaddr_storage *)malloc(sizeof(struct sockaddr_storage));
 		memcpy(client_addr, &(srq->addr), srq->addrlen);
 		atr_pkt = ldns_pkt_clone(srq->request); // Clone the query
@@ -249,7 +254,9 @@ int main(int argc, char *argv[])
 {
 	int				n_forks = 4;
 	int				n_threads = 0;
-	std::vector<const char *>	hostnames;
+	// Max # IPaddresses to bind to = 10, simpler
+	char *hostnames[10]={NULL,};
+  int num_hosts = 0;
 	const char		*port = "53";
 	const char		*domain = "oob.dashnxdomain.net";
 	const char		*zonefile = "data/zone.oob.dashnxdomain.net";
@@ -259,7 +266,15 @@ int main(int argc, char *argv[])
 	while (argc > 0 && **argv == '-') {
 		char o = *++*argv;
 		switch (o) {
-			case 'h': --argc; hostnames.push_back(*++argv); break;
+			case 'h': 
+        --argc;
+        hostnames[num_hosts] = *++argv;
+        num_hosts++;
+        if (num_hosts > 9) {
+          printf("Too many addresses\n");
+          exit(1);
+        }
+        break;
 			case 'p': --argc; port = *++argv; break;
 			case 'd': --argc; domain = *++argv; break;
 			case 'z': --argc; zonefile = *++argv; break;
@@ -272,7 +287,7 @@ int main(int argc, char *argv[])
 	}
 
 	SiblingZone		zone(domain, zonefile, logfile);
-	InstanceData	data = { EVLDNSBase::bind_to_all(hostnames, port, 100), &zone };
+	InstanceData	 data = { EVLDNSBase::bind_to_all(hostnames, num_hosts, port, 100), &zone };
 
 	farm(n_forks, n_threads, start_instance, &data, 0);
 

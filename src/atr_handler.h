@@ -13,5 +13,7 @@ typedef struct atr_response {
 
 int makeTimer(int index, ldns_pkt *atr_pkt, struct sockaddr_storage *client_addr, int socket);
 void send_atr(int index);
-int get_first_free();
-
+int get_first_free(void);
+static void timerHandler(int sig, siginfo_t *si, void *uc);
+void clearTimer(int index);
+void clean_atr(void);

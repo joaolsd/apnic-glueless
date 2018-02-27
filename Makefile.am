@@ -1,5 +1,7 @@
 ACLOCAL_AMFLAGS = -I m4 --install
 
+AM_LDFLAGS = -lrt
+
 bin_PROGRAMS = \
 	glueless-parent \
 	glueless-child \
@@ -10,7 +12,8 @@ EXTRAS = \
 	src/process.c src/process.h \
 	src/evutils.c src/evutils.h \
 	src/utils.c src/utils.h \
-	src/logging.c src/logging.h
+	src/logging.c src/logging.h \
+	src/atr_handler.c src/atr_handler.h
 
 glueless_parent_SOURCES = \
 	src/glueless-parent.cc \

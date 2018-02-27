@@ -36,7 +36,9 @@ public:
 	~EVLDNSBase();
 
 public:
-	static vfds bind_to_all(const std::vector<const char *>& hostnames, const char *port, int backlog);
+	static vfds bind_to_all(char *hostnames[], int num_hosts, const char *port, int backlog);
+	
+	// static vfds bind_to_all(const std::vector<const char *>& hostnames, const char *port, int backlog);
 
 	void add_callback(evldns_callback callback, void *userdata);
 	void start();

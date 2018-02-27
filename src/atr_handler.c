@@ -1,10 +1,14 @@
-#include <signal.h>
-#include <time.h>
+#define __USE_POSIX199309
+#define _POSIX_C_SOURCE 199309L
+// #define _POSIX_C_SOURCE  200112L
+
 #include <errno.h>
 #include <string.h>
 #include <netinet/in.h>
 
+#include <signal.h>
 #include <evldns.h>
+#include <time.h>
 
 #include "atr_handler.h"
 
@@ -13,7 +17,7 @@ atr_response atr_responses[MAX_OUTSTANDING_ATR];
 /******
  * Send delayed (atr) packet
  **********/
-void send_atr(index) {
+void send_atr(int index) {
 	int socket;
 	struct sockaddr_storage *client_addr;
 	ssize_t len_sent;
@@ -126,7 +130,7 @@ int makeTimer(int index, ldns_pkt *atr_pkt, struct sockaddr_storage *client_addr
 /****************************************
  * Clear a timer
  ***************************************/
-int clearTimer(int index)
+void clearTimer(int index)
 {
 	timer_t timerID = atr_responses[index].timerid;
 	timer_delete(timerID);
@@ -136,7 +140,7 @@ int clearTimer(int index)
  * get_first_free()
  * Execute from main thread, never from the within the signal handler
  *********************************************************************/
-int get_first_free() {
+int get_first_free(void) {
 	int i;
 	int counter = 0;
 	
@@ -164,7 +168,7 @@ int get_first_free() {
  * clean_atr
  * Execute from main thread, never from the within the signal handler
  *********************************************************************/
-int clean_atr() {
+void clean_atr(void) {
 	int j;
 	int counter = 0;
 	

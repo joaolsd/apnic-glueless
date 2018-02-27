@@ -33,17 +33,21 @@ EVLDNSBase::~EVLDNSBase()
 {
 }
 
-EVLDNSBase::vfds EVLDNSBase::bind_to_all(const std::vector<const char *>& hostnames, const char *port, int backlog)
+// EVLDNSBase::vfds EVLDNSBase::bind_to_all(const std::vector<const char *>& hostnames, const char *port, int backlog)
+EVLDNSBase::vfds EVLDNSBase::bind_to_all(char *hostnames[], int num_hosts, const char *port, int backlog)
 {
-	vfds		vfds;
-
-	if (hostnames.size() == 0) {
-		// default bind to INADDR_ANY
-		vfds.push_back(::bind_to_all(NULL, port, backlog));
-	} else {
-		for (auto hostname: hostnames) {
-			vfds.push_back(::bind_to_all(hostname, port, backlog));
-		}
+	
+	int *results;
+	int i;
+	vfds vfds;
+	
+	// Hack to make bind_to_all here match what is used by apnic-master and is in
+	// our version of evldns.
+		
+	results = ::bind_to_all(hostnames, num_hosts, port, backlog);
+	// std::vector<int> vfds(::bind_to_all(hostnames, num_hosts, port, backlog), num_hosts);
+	for (i=0;i<num_hosts;i++) {
+		vfds.push_back(results+i);
 	}
 
 	return vfds;
