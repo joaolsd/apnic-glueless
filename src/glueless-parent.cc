@@ -84,6 +84,7 @@ ParentZone::~ParentZone()
 
 void ParentZone::main_callback(evldns_server_request *srq, ldns_rdf *qname, ldns_rr_type qtype)
 {
+	bool ignore_edns_size = false;
 	auto req = srq->request;
 	auto resp = srq->response = evldns_response(req, LDNS_RCODE_NOERROR);
 	auto answer = ldns_pkt_answer(resp);
@@ -101,7 +102,7 @@ void ParentZone::main_callback(evldns_server_request *srq, ldns_rdf *qname, ldns
 	ldns_pkt_set_ancount(resp, ldns_rr_list_rr_count(answer));
 	ldns_pkt_set_nscount(resp, ldns_rr_list_rr_count(authority));
 
-	truncation_check(srq);
+	truncation_check(srq, ignore_edns_size);
 	log_request(logfile.c_str(), srq, qname, qtype, LDNS_RR_CLASS_IN);
 }
 

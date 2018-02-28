@@ -41,7 +41,7 @@ public:
 public:
 	void main_callback(evldns_server_request *srq, ldns_rdf *qname, ldns_rr_type qtype);
 	void apex_callback(ldns_rdf *qname, ldns_rr_type qtype, ldns_pkt *resp);
-	void sub_callback(ldns_rdf *qname, ldns_rr_type qtype, ldns_pkt *resp, evldns_server_request *srq);
+	void sub_callback(ldns_rdf *qname, ldns_rr_type qtype, ldns_pkt *resp, evldns_server_request *srq, bool *ignore_edns_size);
 };
 
 SiblingZone::SiblingZone(
@@ -66,10 +66,12 @@ void SiblingZone::main_callback(evldns_server_request *srq, ldns_rdf *qname, ldn
 	auto answer = ldns_pkt_answer(resp);
 	auto authority = ldns_pkt_authority(resp);
 	
+	bool ignore_edns_size = false;
+	
 	if (ldns_dname_compare(qname, origin) == 0) {
 		apex_callback(qname, qtype, resp);
 	} else if (ldns_dname_is_subdomain(qname, origin)) {
-		sub_callback(qname, qtype, resp, srq);
+		sub_callback(qname, qtype, resp, srq, &ignore_edns_size);
 	} else {
 		ldns_pkt_set_rcode(resp, LDNS_RCODE_REFUSED);
 		return;
@@ -86,7 +88,7 @@ void SiblingZone::main_callback(evldns_server_request *srq, ldns_rdf *qname, ldn
 	ldns_pkt_set_nscount(resp, ldns_rr_list_rr_count(authority));
 	ldns_pkt_set_aa(resp, 1);
 
-	truncation_check(srq);
+	truncation_check(srq, ignore_edns_size);
 	log_request(logfile.c_str(), srq, qname, qtype, LDNS_RR_CLASS_IN);
 }
 
@@ -125,7 +127,7 @@ static void add_stuffing(ldns_rr_list *section, ldns_rdf *qname, unsigned int ty
 	ldns_rr_list_push_rr(section, rr);
 }
 
-void SiblingZone::sub_callback(ldns_rdf *qname, ldns_rr_type qtype, ldns_pkt *resp, evldns_server_request *srq)
+void SiblingZone::sub_callback(ldns_rdf *qname, ldns_rr_type qtype, ldns_pkt *resp, evldns_server_request *srq, bool *ignore_edns_size)
 {
 	auto answer = ldns_pkt_answer(resp);
 	auto authority = ldns_pkt_authority(resp);
@@ -166,8 +168,13 @@ void SiblingZone::sub_callback(ldns_rdf *qname, ldns_rr_type qtype, ldns_pkt *re
 			auto p = (char *)ldns_rdf_data(sub_label) + 1;
 			bool dostuff = sscanf(p, "%03x-%03x-%04x-%04x-%04x-", &prelen, &postlen, &pretype, &posttype, &flags) == 5;
 			do_atr = (flags & 0x0002); // ATR is bit 2 in the flags
-			v4_lock = (flags & 0x0004); // Reply if query came over IPv4, otherwise REFUSED
-			v6_lock = (flags & 0x0008); // Reply if query came over IPv6, otherwise REFUSED
+			// Reply if query came over IPv4, otherwise REFUSED
+			v4_lock = (flags & 0x0004);
+			 // Reply if query came over IPv6, otherwise REFUSED  
+			v6_lock = (flags & 0x0008);
+			 // Ignore EDNS bufsize sent by the client and set it our value (4096)
+			*ignore_edns_size = (flags & 0x0010);
+			
 			if (is_tcp) {
 				do_atr = false; // ATR is only done for UDP queries
 			}
@@ -176,10 +183,6 @@ void SiblingZone::sub_callback(ldns_rdf *qname, ldns_rr_type qtype, ldns_pkt *re
 			// (0x0004 for IPv4, 0x0006 for IPv6)
 			// and the client's incoming query comes over a non-matching transport
 			// reply with SRVFAIL to trigger fallback to the other transport
-			
-			// struct sockaddr_storage *client_addr = (struct sockaddr_storage *)malloc(sizeof(struct sockaddr_storage));
-			// memcpy(client_addr, &(srq->addr), srq->addrlen);
-			
 			
 			if (srq->addr.ss_family == AF_INET && v6_lock == true) {
 				ldns_pkt_set_rcode(resp, LDNS_RCODE_REFUSED);

@@ -222,6 +222,8 @@ void DynamicZone::sub_callback(ldns_pkt *resp, ldns_rdf *qname, ldns_rr_type qty
 
 void ChildZone::main_callback(evldns_server_request *srq, ldns_rdf *qname, ldns_rr_type qtype)
 {
+	bool ignore_edns_size = false;
+	
 	if (ldns_dname_is_subdomain(qname, origin)) {
 		// construct and sign dynamic zone with correct origin
 		unsigned int qname_count = ldns_dname_label_count(qname);
@@ -238,7 +240,7 @@ void ChildZone::main_callback(evldns_server_request *srq, ldns_rdf *qname, ldns_
 		srq->response = evldns_response(srq->request, LDNS_RCODE_REFUSED);
 	}
 
-	truncation_check(srq);
+	truncation_check(srq, ignore_edns_size);
 	log_request(logfile.c_str(), srq, qname, qtype, LDNS_RR_CLASS_IN);
 }
 

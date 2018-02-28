@@ -56,7 +56,7 @@ void query_check(evldns_server_request *srq,
 	}
 }
 
-void truncation_check(evldns_server_request *srq)
+void truncation_check(evldns_server_request *srq, bool ignore_edns_size)
 {
 	ldns_pkt *req = srq->request;
 	ldns_pkt *resp = srq->response;
@@ -80,20 +80,20 @@ void truncation_check(evldns_server_request *srq)
   // Temporary hack to limit response size on UDP
   // If the response size is under 1280, do the EDNS checks.
   // Otherwise go to truncation
-  // if (srq->wire_resplen <= 1280) {
-  // ##### DISABLED ######
-  // ##### TODO : Make this a cli option flag ######
-  	/* if the client used EDNS, use that new bufsize */
-  	if (ldns_pkt_edns(req)) {
-  		unsigned int ednssize = ldns_pkt_edns_udp_size(req);
-  		if (ednssize > bufsize) {
-  			bufsize = ednssize;
-  		}
+		// if (srq->wire_resplen <= 1280) {
+	/* if the client used EDNS, use that new bufsize */
+	if (ldns_pkt_edns(req)) {
+		unsigned int ednssize = ldns_pkt_edns_udp_size(req);
+		if (ignore_edns_size) {
+			bufsize = 4096;
+		} else if (ednssize > bufsize) {
+			bufsize = ednssize;
+		}
 
-  		/* it fits - we're OK */
-  		if (srq->wire_resplen <= bufsize) {
-  			return;
-  		}
+		/* it fits - we're OK */
+		if (srq->wire_resplen <= bufsize) {
+			return;
+		}
   	}
   // }
 
