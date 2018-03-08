@@ -141,6 +141,8 @@ void SiblingZone::sub_callback(ldns_rdf *qname, ldns_rr_type qtype, ldns_pkt *re
 	bool v4_lock;
 	bool v6_lock;
 	bool skip_answer = false;
+	bool do_tc_only = false;
+	
 	
 	if (srq->is_tcp == 1) {
 			is_tcp = true;
@@ -166,7 +168,7 @@ void SiblingZone::sub_callback(ldns_rdf *qname, ldns_rr_type qtype, ldns_pkt *re
 			// add optional stuffing before the answer here
 			unsigned int prelen, pretype, postlen, posttype;
 			auto p = (char *)ldns_rdf_data(sub_label) + 1;
-			bool dostuff = sscanf(p, "%03x-%03x-%04x-%04x-%04x-", &prelen, &postlen, &pretype, &posttype, &f) == 5;
+			bool dostuff = sscanf(p, "%03x-%03x-%04x-%04x-%04x-", &prelen, &postlen, &pretype, &posttype, &flags) == 5;
 			do_atr = (flags & 0x0002); // ATR is bit 2 in the flags
 			// Reply if query came over IPv4, otherwise REFUSED
 			v4_lock = (flags & 0x0004);
