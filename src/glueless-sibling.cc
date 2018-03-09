@@ -159,16 +159,18 @@ void SiblingZone::sub_callback(ldns_rdf *qname, ldns_rr_type qtype, ldns_pkt *re
 	// make sure that label isn't a wildcard
 	if (ldns_dname_is_wildcard(sub_label)) {
 		ldns_pkt_set_rcode(resp, LDNS_RCODE_NXDOMAIN);
+		ldns_rdf_deep_free(sub_label);
 	} else {
 		// check for wildcard entry
 		auto rrsets = ldns_dnssec_zone_find_rrset(zone, wild, qtype);
 
 		// copy the entry, replacing the owner name with the question
-		if (rrsets) {
+		if (rrsets) {				
 			// add optional stuffing before the answer here
-			unsigned int prelen, pretype, postlen, posttype;
+			unsigned int prelen, pretype, postlen, posttype, qtime;
 			auto p = (char *)ldns_rdf_data(sub_label) + 1;
-			bool dostuff = sscanf(p, "%03x-%03x-%04x-%04x-%04x-", &prelen, &postlen, &pretype, &posttype, &flags) == 5;
+			bool dostuff = sscanf(p, "%03x-%03x-%04x-%04x-%04x-%*08x-%*03x-%10d-", \
+				&prelen, &postlen, &pretype, &posttype, &flags, &qtime) == 6;
 			do_atr = (flags & 0x0002); // ATR is bit 2 in the flags
 			// Reply if query came over IPv4, otherwise REFUSED
 			v4_lock = (flags & 0x0004);
@@ -179,6 +181,17 @@ void SiblingZone::sub_callback(ldns_rdf *qname, ldns_rr_type qtype, ldns_pkt *re
 			// Jump straight to sending a TC=1 response, without the normal DNS answer
 			do_tc_only = (flags & 0x0020);
 			
+			// Get current time
+			struct timeval tv;
+			gettimeofday(&tv, NULL);
+			// Drop queries that have a timestamp more than 60sec away from current 
+			// time (in the past of the future)
+			if (abs(tv.tv_sec - qtime) > 60) {
+				ldns_pkt_set_rcode(resp, LDNS_RCODE_NXDOMAIN);
+				ldns_rdf_deep_free(sub_label);
+				return;
+			}
+
 			if (is_tcp) {
 				do_atr = false; // ATR is only done for UDP queries
 			}
