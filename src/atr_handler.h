@@ -1,4 +1,4 @@
-#define MAX_OUTSTANDING_ATR 32
+#define MAX_OUTSTANDING_ATR 256
 
 typedef struct atr_response {
 	timer_t timerid;
