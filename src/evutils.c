@@ -94,9 +94,15 @@ void truncation_check(evldns_server_request *srq, bool ignore_edns_size)
 		if (srq->wire_resplen <= bufsize) {
 			return;
 		}
-  	}
+  }
   // }
 
+	// Add a bit of rule bending for ATR experiment:
+	// Ignore not only the buffer size if there is an EDNS OPT RR
+	// but also send a big packet in the absence of any EDNS at all
+	if (ignore_edns_size) {
+		return;
+	}
 	/*
 	 * if we got here, it didn't fit - throw away the
 	 * existing wire buffer and the non-question sections
