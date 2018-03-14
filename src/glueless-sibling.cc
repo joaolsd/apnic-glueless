@@ -203,11 +203,13 @@ void SiblingZone::sub_callback(ldns_rdf *qname, ldns_rr_type qtype, ldns_pkt *re
 			
 			if (srq->addr.ss_family == AF_INET && v6_lock == true) {
 				ldns_pkt_set_rcode(resp, LDNS_RCODE_REFUSED);
-				skip_answer = true;
+				ldns_rdf_deep_free(sub_label);
+				return;
 			}
 			if (srq->addr.ss_family == AF_INET6 && v4_lock == true) {
 				ldns_pkt_set_rcode(resp, LDNS_RCODE_REFUSED);
-				skip_answer = true;
+				ldns_rdf_deep_free(sub_label);
+				return;
 			}
 			
 			if (do_tc_only) {
