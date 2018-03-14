@@ -344,7 +344,7 @@ int main(int argc, char *argv[])
 	}
 
 	SiblingZone		zone(domain, zonefile, logfile);
-	InstanceData	 data = { EVLDNSBase::bind_to_all(hostnames, num_hosts, port, 100), &zone };
+	InstanceData	 data = { EVLDNSBase::bind_to_all(hostnames, num_hosts, port, 1024), &zone };
 
 	farm(n_forks, n_threads, start_instance, &data, 0);
 
