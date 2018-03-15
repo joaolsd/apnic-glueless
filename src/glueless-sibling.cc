@@ -212,11 +212,10 @@ void SiblingZone::sub_callback(ldns_rdf *qname, ldns_rr_type qtype, ldns_pkt *re
 				return;
 			}
 			
-			if (do_tc_only) {
+			if (do_tc_only and not is_tcp) {
 				skip_answer = true;
 				do_atr = false;
-				
-				ldns_pkt_set_tc(resp, true);  // and turn it into a truncated,
+				ldns_pkt_set_tc(resp, true);  // turn query into a truncated,
 				ldns_pkt_set_aa(resp, true);  // authoritative,
 				ldns_pkt_set_ad(resp, false); // unverified,
 				ldns_pkt_set_qr(resp, true);  // response
