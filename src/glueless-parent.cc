@@ -243,7 +243,7 @@ void ParentZone::referral_callback(ldns_rdf *qname, ldns_rr_type qtype, bool dns
 			auto ent_label = ldns_dname_new_frm_str(ent_label_buffer);
 			ldns_dname_cat(child_label, ent_label);
 			
-			
+			free(ent_label_buffer);
 			free(ent_label);
 			free(child_str);
 			
