@@ -177,16 +177,16 @@ void DynamicZone::apex_callback(ldns_pkt *resp, ldns_rdf *qname, ldns_rr_type qt
 			auto sub_label = ldns_dname_label(qname, 0);
 			
 			// Create fake signatures to pad the child response
-			unsigned int prelen, pretype, postlen, posttype;
-			auto p = (char *)ldns_rdf_data(sub_label) + 1;
-			bool dostuff = sscanf(p, "%03x-%03x-%04x-%04x-%*04x-", &prelen, &postlen, &pretype, &posttype) == 4;
-
-			if (dostuff && (prelen > 0 || postlen > 0)) {
-				new_sig = add_stuffing((rrsets->signatures)->rr, qname, LDNS_RR_TYPE_RRSIG, prelen+postlen);
-				if (new_sig != NULL) {
-					ldns_dnssec_rrs_add_rr(rrsets->signatures, new_sig);
-				}
-			}
+			// unsigned int prelen, pretype, postlen, posttype;
+			// auto p = (char *)ldns_rdf_data(sub_label) + 1;
+			// bool dostuff = sscanf(p, "%03x-%03x-%04x-%04x-%*04x-", &prelen, &postlen, &pretype, &posttype) == 4;
+			//
+			// if (dostuff && (prelen > 0 || postlen > 0)) {
+			// 	new_sig = add_stuffing((rrsets->signatures)->rr, qname, LDNS_RR_TYPE_RRSIG, prelen+postlen);
+			// 	if (new_sig != NULL) {
+			// 		ldns_dnssec_rrs_add_rr(rrsets->signatures, new_sig);
+			// 	}
+			// }
 			LDNS_rr_list_cat_dnssec_rrs_clone(answer, rrsets->signatures);
 		}
 	} else {
