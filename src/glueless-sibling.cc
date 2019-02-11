@@ -209,15 +209,15 @@ static void dispatch(evldns_server_request *srq, void *userdata, ldns_rdf *qname
 }
 
 struct InstanceData {
-	EVLDNSBase::vfds	 vfds;
-	SiblingZone			*zone;
+	int		 *fds;
+	SiblingZone	*zone;
 };
 
 static void *start_instance(void *userdata)
 {
 	auto data = reinterpret_cast<InstanceData *>(userdata);
 
-	EVLDNSBase server(data->vfds);
+	EVLDNSBase server(data->fds);
 	server.add_callback(dispatch, data->zone);
 	server.start();
 
@@ -228,7 +228,9 @@ int main(int argc, char *argv[])
 {
 	int				n_forks = 4;
 	int				n_threads = 0;
-	std::vector<const char *>	hostnames;
+	// Max # IPaddresses to bind to = 10, simpler
+	const char *hostnames[10]={NULL,};
+  int num_hosts = 0;
 	const char		*port = "53";
 	const char		*domain = "oob.dashnxdomain.net";
 	const char		*zonefile = "data/zone.oob.dashnxdomain.net";
@@ -239,7 +241,15 @@ int main(int argc, char *argv[])
 	while (argc > 0 && **argv == '-') {
 		char o = *++*argv;
 		switch (o) {
-			case 'h': --argc; hostnames.push_back(*++argv); break;
+			case 'h': 
+        --argc;
+        hostnames[num_hosts] = *++argv;
+        num_hosts++;
+        if (num_hosts > 9) {
+          printf("Too many addresses\n");
+          exit(1);
+        }
+        break;
 			case 'p': --argc; port = *++argv; break;
 			case 'd': --argc; domain = *++argv; break;
 			case 'z': --argc; zonefile = *++argv; break;
@@ -255,7 +265,7 @@ int main(int argc, char *argv[])
 	exp_timeout_t = parse_time(exp_timeout);
 	// fprintf (stderr, "time: %d", exp_timeout_t);
 	SiblingZone		zone(domain, zonefile, logfile);
-	InstanceData	data = { EVLDNSBase::bind_to_all(hostnames, port, 100), &zone };
+	InstanceData	data = { bind_to_all(hostnames, num_hosts, port, 100), &zone };
 
 	farm(n_forks, n_threads, start_instance, &data, 0);
 
