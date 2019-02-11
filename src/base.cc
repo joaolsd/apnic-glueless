@@ -19,34 +19,16 @@
 #include "base.h"
 #include "utils.h"
 
-EVLDNSBase::EVLDNSBase(const vfds& vfds)
+EVLDNSBase::EVLDNSBase(const int *fds)
 {
 	ev_base = event_base_new();
 	ev_server = evldns_add_server(ev_base);
-	for (auto fds: vfds) {
-		evldns_add_server_ports(ev_server, fds);
-	}
+	evldns_add_server_ports(ev_server, fds);
 	evldns_add_callback(ev_server, NULL, LDNS_RR_CLASS_ANY, LDNS_RR_TYPE_ANY, query_check, NULL);
 }
 
 EVLDNSBase::~EVLDNSBase()
 {
-}
-
-EVLDNSBase::vfds EVLDNSBase::bind_to_all(const std::vector<const char *>& hostnames, const char *port, int backlog)
-{
-	vfds		vfds;
-
-	if (hostnames.size() == 0) {
-		// default bind to INADDR_ANY
-		vfds.push_back(::bind_to_all(NULL, port, backlog));
-	} else {
-		for (auto hostname: hostnames) {
-			vfds.push_back(::bind_to_all(hostname, port, backlog));
-		}
-	}
-
-	return vfds;
 }
 
 void EVLDNSBase::add_callback(evldns_callback callback, void *userdata)
@@ -79,7 +61,7 @@ Zone::~Zone() {
 }
 
 SignedZone::SignedZone(const std::string& domain, const std::string& zonefile, const std::string& keyfile)
-	: Zone(domain, zonefile), keys_added(false)
+	: Zone(domain, zonefile)
 {
 	keys = util_load_key(origin, keyfile.c_str());
 	if (!keys) {
@@ -89,11 +71,6 @@ SignedZone::SignedZone(const std::string& domain, const std::string& zonefile, c
 
 void SignedZone::sign()
 {
-	if (!keys_added) {
-		util_add_keys(zone, keys);
-		keys_added = true;
-	}
-
 	ldns_status status = util_sign_zone(zone, keys);
 	if (status != LDNS_STATUS_OK) {
 		throw std::runtime_error("zone signing failed");

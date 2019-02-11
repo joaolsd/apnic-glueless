@@ -17,7 +17,6 @@
 #ifndef __BASE_H
 #define __BASE_H
 
-#include <vector>
 #include <string>
 #include <evldns.h>
 #include "evutils.h"
@@ -29,15 +28,10 @@ private:
 	evldns_server		*ev_server;
 
 public:
-	typedef std::vector<int *>	vfds;
-
-public:
-	EVLDNSBase(const vfds& vfds);
+	EVLDNSBase(const int *fds);
 	~EVLDNSBase();
 
 public:
-	static vfds bind_to_all(const std::vector<const char *>& hostnames, const char *port, int backlog);
-
 	void add_callback(evldns_callback callback, void *userdata);
 	void start();
 };
@@ -58,7 +52,6 @@ class SignedZone : public Zone {
 
 protected:
 	ldns_key_list		*keys;
-	bool				 keys_added;
 
 public:
 	SignedZone(const std::string& domain, const std::string& zonefile, const std::string& keyfile);

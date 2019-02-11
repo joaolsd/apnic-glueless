@@ -53,10 +53,7 @@ static void getcpu(cpu_set_t* cpus, int n)
 static void make_threads(int threads, routine fn, void *data, int flags)
 {
 	if (threads <= 1) {
-		while (1) {
-			fn(data);
-			fprintf(stderr, "instance stopped unexpectedly, restarting\n");
-		}
+		fn(data);
 	} else {
 		pthread_t		pt[threads];
 		pthread_attr_t	attr;
