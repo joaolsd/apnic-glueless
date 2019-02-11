@@ -25,6 +25,7 @@ extern "C" {
 
 ldns_dnssec_zone *util_load_zone(const ldns_rdf *origin, const char *zonefile);
 ldns_key_list *util_load_key(const ldns_rdf *origin, const char *keyfile);
+void util_add_keys(ldns_dnssec_zone *zone, ldns_key_list *keys);
 ldns_status util_sign_zone(ldns_dnssec_zone *zone, ldns_key_list *keys);
 
 /* TODO: all of the below require error checks */

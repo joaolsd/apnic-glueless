@@ -61,7 +61,7 @@ Zone::~Zone() {
 }
 
 SignedZone::SignedZone(const std::string& domain, const std::string& zonefile, const std::string& keyfile)
-	: Zone(domain, zonefile)
+	: Zone(domain, zonefile), keys_added(false)
 {
 	keys = util_load_key(origin, keyfile.c_str());
 	if (!keys) {
@@ -71,6 +71,11 @@ SignedZone::SignedZone(const std::string& domain, const std::string& zonefile, c
 
 void SignedZone::sign()
 {
+	if (!keys_added) {
+			util_add_keys(zone, keys);
+			keys_added = true;
+		}
+
 	ldns_status status = util_sign_zone(zone, keys);
 	if (status != LDNS_STATUS_OK) {
 		throw std::runtime_error("zone signing failed");

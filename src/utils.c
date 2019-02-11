@@ -71,16 +71,19 @@ ldns_key_list *util_load_key(const ldns_rdf *origin, const char *keyfile)
 	return list;
 }
 
-ldns_status util_sign_zone(ldns_dnssec_zone *zone, ldns_key_list *keys)
+void util_add_keys(ldns_dnssec_zone *zone, ldns_key_list *keys)
 {
-	ldns_rr_list		*new_rrs;
-	ldns_status			status;
-
 	/* add all the keys to the zone */
 	for (int i = 0, n = ldns_key_list_key_count(keys); i < n; ++i) {
 		ldns_rr *rr = ldns_key2rr(ldns_key_list_key(keys, i));
 		ldns_dnssec_zone_add_rr(zone, rr);
 	}
+}
+
+ldns_status util_sign_zone(ldns_dnssec_zone *zone, ldns_key_list *keys)
+{
+	ldns_rr_list		*new_rrs;
+	ldns_status			status;
 
 	/* sign the zone, then discard the extra list of RRs */
 	new_rrs = ldns_rr_list_new();

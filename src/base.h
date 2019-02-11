@@ -52,6 +52,7 @@ class SignedZone : public Zone {
 
 protected:
 	ldns_key_list		*keys;
+  bool				 keys_added;
 
 public:
 	SignedZone(const std::string& domain, const std::string& zonefile, const std::string& keyfile);
