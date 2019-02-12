@@ -285,7 +285,7 @@ int main(int argc, char *argv[])
 	int				n_forks = 4;
 	int				n_threads = 0;
 	// Max # IPaddresses to bind to = 10, simpler
-	const char *hostnames[10]={NULL,};
+	char *hostnames[10]={NULL,};
   int num_hosts = 0;
 	const char		*port = "53";
 	const char		*domain = "test.dotnxdomain.net";
