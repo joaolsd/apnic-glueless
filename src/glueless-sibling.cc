@@ -142,32 +142,32 @@ void SiblingZone::sub_callback(ldns_rdf *qname, ldns_rr_type qtype, ldns_pkt *re
 
 		// copy the entry, replacing the owner name with the question
 		if (rrsets) {
-			// // add optional stuffing before the answer here
-			// unsigned int prelen, pretype, postlen, posttype;
-			// auto p = (char *)ldns_rdf_data(sub_label) + 1;
-			// bool dostuff = sscanf(p, "%03x-%03x-%04x-%04x-%*04x-", &prelen, &postlen, &pretype, &posttype) == 4;
-			//
-			// // if qtype is AAAA reduce the padding by 12 bytes so that the response
-			// // is the same length as for an A.
-			// if (qtype == LDNS_RR_TYPE_AAAA) {
-			// 	if (prelen > postlen) {
-			// 		if (prelen > 12) {
-			// 			prelen -= 12;
-			// 		} else {
-			// 			prelen = 0;
-			// 		}
-			// 	} else { // postlen is the bigger one
-			// 		if (postlen > 12) {
-			// 			postlen -= 12;
-			// 		} else {
-			// 			postlen = 0;
-			// 		}
-			// 	}
-			// }
-			//
-			// if (dostuff && prelen > 0) {
-			// 	add_stuffing(answer, qname, pretype, prelen);
-			// }
+			// add optional stuffing before the answer here
+			unsigned int prelen, pretype, postlen, posttype;
+			auto p = (char *)ldns_rdf_data(sub_label) + 1;
+			bool dostuff = sscanf(p, "%03x-%03x-%04x-%04x-%*04x-", &prelen, &postlen, &pretype, &posttype) == 4;
+
+			// if qtype is AAAA reduce the padding by 12 bytes so that the response
+			// is the same length as for an A.
+			if (qtype == LDNS_RR_TYPE_AAAA) {
+				if (prelen > postlen) {
+					if (prelen > 12) {
+						prelen -= 12;
+					} else {
+						prelen = 0;
+					}
+				} else { // postlen is the bigger one
+					if (postlen > 12) {
+						postlen -= 12;
+					} else {
+						postlen = 0;
+					}
+				}
+			}
+
+			if (dostuff && prelen > 0) {
+				add_stuffing(answer, qname, pretype, prelen);
+			}
 			auto rrs = rrsets->rrs;
 			while (rrs) {
 				auto rr = ldns_rr_clone(rrs->rr);
@@ -178,9 +178,9 @@ void SiblingZone::sub_callback(ldns_rdf *qname, ldns_rr_type qtype, ldns_pkt *re
 			}
 
 			// add optional stuffing after the answer (or in other sections?)
-			// if (dostuff && postlen > 0) {
-			// 	add_stuffing(answer, qname, posttype, postlen);
-			// }
+			if (dostuff && postlen > 0) {
+				add_stuffing(answer, qname, posttype, postlen);
+			}
 		}
 	}
 

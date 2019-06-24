@@ -235,17 +235,23 @@ void ParentZone::referral_callback(ldns_rdf *qname, ldns_rr_type qtype, bool dns
 
 			// replace any wildcard RDATA on above RRs
 			auto child_label = ldns_dname_label(child, 0);
-			// Add ENT label to child_label
-			char * ent_label_buffer = (char *) malloc(64);
-			strcpy(ent_label_buffer,"ent-");
-			char * child_str = ldns_rdf2str(child_label);
-			strncat(ent_label_buffer, child_str, 59);
-			auto ent_label = ldns_dname_new_frm_str(ent_label_buffer);
-			ldns_dname_cat(child_label, ent_label);
 			
-			free(ent_label_buffer);
-			free(ent_label);
-			free(child_str);
+			// Add ENT label to child_label if the experiment label doesn't match
+			// a normal glueless label (padding label)
+			unsigned int prelen, pretype, postlen, posttype;
+			bool dostuff = sscanf(p, "%03x-%03x-%04x-%04x-%*04x-", &prelen, &postlen, &pretype, &posttype) == 4;
+			if (! dostuff) {
+				char * ent_label_buffer = (char *) malloc(64);
+				strcpy(ent_label_buffer,"ent-");
+				char * child_str = ldns_rdf2str(child_label);
+				strncat(ent_label_buffer, child_str, 59);
+				auto ent_label = ldns_dname_new_frm_str(ent_label_buffer);
+				ldns_dname_cat(child_label, ent_label);
+			
+				free(ent_label_buffer);
+				free(ent_label);
+				free(child_str);
+			}
 			
 			// Do wildcard substitution
 			LDNS_rr_wildcard_substitute(clone, child_label);
