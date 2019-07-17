@@ -222,6 +222,19 @@ void DynamicZone::sub_callback(ldns_pkt *resp, ldns_rdf *qname, ldns_rr_type qty
 
 void ChildZone::main_callback(evldns_server_request *srq, ldns_rdf *qname, ldns_rr_type qtype)
 {
+	unsigned int timestamp;
+	struct timeval tv;
+
+	gettimeofday(&tv, NULL);
+	auto p = (char *)ldns_rdf_data(qname) + 1;
+	(void)sscanf(p, "%*03x-%*03x-%*04x-%*04x-%*04x-%*08x-%*02d-%10d-", &timestamp);
+	// If experiment string timestamp is older than 90 sec, return REFUSED
+	if (tv.tv_sec- timestamp > 90) {
+		srq->response = evldns_response(srq->request, LDNS_RCODE_REFUSED);
+		log_request(logfile.c_str(), srq, qname, qtype, LDNS_RR_CLASS_IN);
+		return;
+	}
+	
 	if (ldns_dname_is_subdomain(qname, origin)) {
 		// construct and sign dynamic zone with correct origin
 		unsigned int qname_count = ldns_dname_label_count(qname);
