@@ -145,20 +145,7 @@ void SiblingZone::sub_callback(ldns_rdf *qname, ldns_rr_type qtype, ldns_pkt *re
 			// add optional stuffing before the answer here
 			unsigned int prelen, pretype, postlen, posttype;
 			auto p = (char *)ldns_rdf_data(sub_label) + 1;
-
-			unsigned int timestamp;
-			bool dostuff =
-				sscanf(p, "%03x-%03x-%04x-%04x-%*04x-%*08x-%*02d-%10d-",
-							&prelen, &postlen, &pretype, &posttype, &timestamp) == 4;
-
-			struct timeval tv;
-			gettimeofday(&tv, NULL);
-			// If experiment string timestamp is older than 90 sec, return REFUSED
-			if (tv.tv_sec- timestamp > 90) {
-				ldns_pkt_set_rcode(resp, LDNS_RCODE_REFUSED);
-				ldns_rdf_deep_free(sub_label);
-				return;
-			}
+			bool dostuff = sscanf(p, "%03x-%03x-%04x-%04x-%*04x-", &prelen, &postlen, &pretype, &posttype) == 4;
 
 			// if qtype is AAAA reduce the padding by 12 bytes so that the response
 			// is the same length as for an A.

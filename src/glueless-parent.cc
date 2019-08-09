@@ -196,19 +196,10 @@ void ParentZone::referral_callback(ldns_rdf *qname, ldns_rr_type qtype, bool dns
 
 	// check for broken chain flag
 	unsigned int flags = 0;
-	unsigned int timestamp;
 	auto p = (char *)ldns_rdf_data(child) + 1;
-	(void)sscanf(p, "%*03x-%*03x-%*04x-%*04x-%04x-%*08x-%*02d-%10d-", &flags, &timestamp);
+	(void)sscanf(p, "%*03x-%*03x-%*04x-%*04x-%04x-", &flags);
 	bool broken_chain = (flags & 0x0001);
-	struct timeval tv;
 
-	gettimeofday(&tv, NULL);
-	// If experiment string timestamp is older than 90 sec, return REFUSED
-	if (tv.tv_sec- timestamp > 90) {
-		ldns_pkt_set_rcode(resp, LDNS_RCODE_REFUSED);
-		ldns_rdf_deep_free(child);
-		return;
-	}
 	// synthesize the DS record(s)
 	auto ds_list = ldns_rr_list_new();
 	auto ds_keys = childkeys ? childkeys : keys;
