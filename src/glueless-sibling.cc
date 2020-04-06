@@ -138,48 +138,68 @@ void SiblingZone::sub_callback(ldns_rdf *qname, ldns_rr_type qtype, ldns_pkt *re
 		ldns_pkt_set_rcode(resp, LDNS_RCODE_NXDOMAIN);
 	} else {
 		// check for wildcard entry
+		printf("Find rrsets:\n");
+		char *wild_str;
+		ldns_buffer *buf;
+		buf = ldns_buffer_new(10);
+		if (!buf) {
+			printf("can't get buffer\n");
+		}
+		wild_str = 0;
+		if (ldns_rdf2buffer_str_dname(buf, wild) == LDNS_STATUS_OK) {
+			wild_str = ldns_buffer_export2str(buf);
+		}
+		ldns_buffer_free(buf);
+		printf("QTYPE: %d, wild: %s\n", qtype, wild_str);
 		auto rrsets = ldns_dnssec_zone_find_rrset(zone, wild, qtype);
 
 		// copy the entry, replacing the owner name with the question
 		if (rrsets) {
 			// add optional stuffing before the answer here
+			unsigned int flags = 0;
 			unsigned int prelen, pretype, postlen, posttype;
 			auto p = (char *)ldns_rdf_data(sub_label) + 1;
-			bool dostuff = sscanf(p, "%03x-%03x-%04x-%04x-%*04x-", &prelen, &postlen, &pretype, &posttype) == 4;
-
-			// if qtype is AAAA reduce the padding by 12 bytes so that the response
-			// is the same length as for an A.
-			if (qtype == LDNS_RR_TYPE_AAAA) {
-				if (prelen > postlen) {
-					if (prelen > 12) {
-						prelen -= 12;
-					} else {
-						prelen = 0;
-					}
-				} else { // postlen is the bigger one
-					if (postlen > 12) {
-						postlen -= 12;
-					} else {
-						postlen = 0;
+			bool dostuff = sscanf(p, "%03x-%03x-%04x-%04x-%04x-", &prelen, &postlen, &pretype, &posttype, &flags) == 5;
+			bool do_A_RR = (flags & 0x0002);
+			bool do_AAAA_RR = (flags & 0x0004);
+			if ((qtype == LDNS_RR_TYPE_AAAA && do_AAAA_RR) || (qtype == LDNS_RR_TYPE_A && do_A_RR)) {
+				// if qtype is AAAA reduce the padding by 12 bytes so that the response
+				// is the same length as for an A.
+				if (qtype == LDNS_RR_TYPE_AAAA) {
+					if (prelen > postlen) {
+						if (prelen > 12) {
+							prelen -= 12;
+						} else {
+							prelen = 0;
+						}
+					} else { // postlen is the bigger one
+						if (postlen > 12) {
+							postlen -= 12;
+						} else {
+							postlen = 0;
+						}
 					}
 				}
-			}
 
-			if (dostuff && prelen > 0) {
-				add_stuffing(answer, qname, pretype, prelen);
-			}
-			auto rrs = rrsets->rrs;
-			while (rrs) {
-				auto rr = ldns_rr_clone(rrs->rr);
-				ldns_rdf_deep_free(ldns_rr_owner(rr));
-				ldns_rr_set_owner(rr, ldns_rdf_clone(qname));
-				ldns_rr_list_push_rr(answer, rr);
-				rrs = rrs->next;
-			}
+				if (dostuff && prelen > 0) {
+					add_stuffing(answer, qname, pretype, prelen);
+				}
+				auto rrs = rrsets->rrs;
+				while (rrs) {
+					auto rr = ldns_rr_clone(rrs->rr);
+					ldns_rdf_deep_free(ldns_rr_owner(rr));
+					ldns_rr_set_owner(rr, ldns_rdf_clone(qname));
+					ldns_rr_list_push_rr(answer, rr);
+					rrs = rrs->next;
+				}
 
-			// add optional stuffing after the answer (or in other sections?)
-			if (dostuff && postlen > 0) {
-				add_stuffing(answer, qname, posttype, postlen);
+				// add optional stuffing after the answer (or in other sections?)
+				if (dostuff && postlen > 0) {
+					add_stuffing(answer, qname, posttype, postlen);
+				}
+			} else {
+				ldns_pkt_set_rcode(resp, LDNS_RCODE_NOERROR);
+				// ldns_dnssec_rrsets_deep_free(rrsets);
 			}
 		}
 	}
