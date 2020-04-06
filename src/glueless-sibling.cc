@@ -79,7 +79,7 @@ void SiblingZone::main_callback(evldns_server_request *srq, ldns_rdf *qname, ldn
 	ldns_pkt_set_nscount(resp, ldns_rr_list_rr_count(authority));
 	ldns_pkt_set_aa(resp, 1);
 
-	truncation_check(srq);
+	sibling_truncation_check(srq);
 	log_request(logfile.c_str(), srq, qname, qtype, LDNS_RR_CLASS_IN);
 }
 

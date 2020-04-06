@@ -115,3 +115,63 @@ void truncation_check(evldns_server_request *srq)
 	/* and convert to wire format again */
 	(void) ldns_pkt2wire(&srq->wire_response, resp, &srq->wire_resplen);
 }
+
+void sibling_truncation_check(evldns_server_request *srq)
+{
+	ldns_pkt *req = srq->request;
+	ldns_pkt *resp = srq->response;
+  /*
+     Change the default buffer size to 4096 in the belief that NS fetches
+     from the sibling are performed by EDNS capable DNS servers who choose to
+     leave out the OPT record to avoid getting DNSSEC info, even if the correct
+     thing to do would be to set the DO bit to 0
+  */
+	unsigned int bufsize = 4096;
+
+	/* if it's TCP, business as usual */
+	if (srq->is_tcp) {
+		return;
+	}
+
+	/* otherwise, convert to wire format, if necessary */
+	if (!srq->wire_response) {
+		(void) ldns_pkt2wire(&srq->wire_response, resp, &srq->wire_resplen);
+	}
+
+	/* if it's under the RFC 1035 limit, we're OK */
+	if (srq->wire_resplen <= bufsize) {
+		return;
+	}
+
+  	/* if the client used EDNS, use that new bufsize */
+  	if (ldns_pkt_edns(req)) {
+  		unsigned int ednssize = ldns_pkt_edns_udp_size(req);
+  		if (ednssize > bufsize) {
+  			bufsize = ednssize;
+  		}
+
+  		/* it fits - we're OK */
+  		if (srq->wire_resplen <= bufsize) {
+  			return;
+  		}
+  	}
+  // }
+
+	/*
+	 * if we got here, it didn't fit - throw away the
+	 * existing wire buffer and the non-question sections
+	 */
+	free(srq->wire_response);
+	LDNS_rr_list_empty_rr_list(ldns_pkt_additional(resp));
+	LDNS_rr_list_empty_rr_list(ldns_pkt_authority(resp));
+	LDNS_rr_list_empty_rr_list(ldns_pkt_answer(resp));
+
+	/* set the TC bit and reset section counts */
+	ldns_pkt_set_tc(resp, true);
+	ldns_pkt_set_ancount(resp, 0);
+	ldns_pkt_set_nscount(resp, 0);
+	ldns_pkt_set_arcount(resp, 0);
+
+	/* and convert to wire format again */
+	(void) ldns_pkt2wire(&srq->wire_response, resp, &srq->wire_resplen);
+}
