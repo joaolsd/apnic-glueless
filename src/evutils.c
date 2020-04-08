@@ -138,27 +138,25 @@ void sibling_truncation_check(evldns_server_request *srq)
 		(void) ldns_pkt2wire(&srq->wire_response, resp, &srq->wire_resplen);
 	}
 
-	/* if it's under the RFC 1035 limit, we're OK */
+	/* if the client used EDNS, use that new bufsize */
+  /* Note that in the absence of EDNS from the client
+     we should use 512 but in the experiment, and given
+     how some resolver do not indicate EDNS when fetching
+     NS records, we will keep the 4096 bufsize in the 
+     absence of EDNS signalling
+  */
+	if (ldns_pkt_edns(req)) {
+		unsigned int ednssize = ldns_pkt_edns_udp_size(req);
+		bufsize = ednssize;
+    if (bufsize < 512) {
+      bufsize = 512;
+    }
+  }
+	/* it fits - we're OK */
 	if (srq->wire_resplen <= bufsize) {
 		return;
 	}
 
-  	/* if the client used EDNS, use that new bufsize */
-  	if (ldns_pkt_edns(req)) {
-  		unsigned int ednssize = ldns_pkt_edns_udp_size(req);
-  		if (ednssize != bufsize) {
-  			bufsize = ednssize;
-        if (bufsize < 512) {
-          bufsize = 512;
-        }
-  		}
-
-  		/* it fits - we're OK */
-  		if (srq->wire_resplen <= bufsize) {
-  			return;
-  		}
-  	}
-  // }
 
 	/*
 	 * if we got here, it didn't fit - throw away the
