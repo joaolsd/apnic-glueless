@@ -146,8 +146,11 @@ void sibling_truncation_check(evldns_server_request *srq)
   	/* if the client used EDNS, use that new bufsize */
   	if (ldns_pkt_edns(req)) {
   		unsigned int ednssize = ldns_pkt_edns_udp_size(req);
-  		if (ednssize > bufsize) {
+  		if (ednssize != bufsize) {
   			bufsize = ednssize;
+        if (bufsize < 512) {
+          bufsize = 512;
+        }
   		}
 
   		/* it fits - we're OK */
